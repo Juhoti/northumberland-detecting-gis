@@ -1,0 +1,22 @@
+{
+  "type": "FeatureCollection",
+  "name": "demo_area",
+  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::27700" } },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Demo area",
+        "note": "Arbitrary polygon drawn for demonstration. Not a real permission and implies no landowner consent."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [401760, 613240], [402420, 613120], [402930, 613180], [403360, 613560],
+          [403420, 614180], [403230, 614760], [402880, 614980], [402440, 614820],
+          [402080, 614460], [401820, 613950], [401760, 613240]
+        ]]
+      }
+    }
+  ]
+}

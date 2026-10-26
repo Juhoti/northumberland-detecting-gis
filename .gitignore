@@ -1,0 +1,18 @@
+# Large downloaded data — re-fetchable from DEFRA / Historic England, never versioned
+data/
+
+# Derived outputs — rebuildable from data + code
+output/
+
+# Real permission boundaries identify land and landowners — never versioned
+aoi/private/
+
+# DuckDB database files — rebuildable
+*.duckdb
+*.duckdb.wal
+
+# Python
+__pycache__/
+
+# macOS noise
+.DS_Store

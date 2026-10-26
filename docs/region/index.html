@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Border Country Designations</title>
+<meta name="description" content="Statutory designations across the Northumberland border country and Coquetdale: scheduled monuments, SSSIs, registered battlefields and parks, open access land and listed buildings.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --surface: #fcfcfb;
+    --panel: #ffffff;
+    --ink: #0b0b0b;
+    --muted: #52514e;
+    --rule: #e4e3df;
+    --no-go: #d03b3b;
+    --consult: #fab219;
+    --access: #2a78d6;
+    --listed: #6250d6;
+    --river: #6f9bcb;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--surface);
+    color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    height: 100vh;
+  }
+  aside {
+    background: var(--panel);
+    border-right: 1px solid var(--rule);
+    overflow-y: auto;
+    padding: 20px 20px 28px;
+  }
+  #map { height: 100%; }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 22px 0 8px;
+  }
+  p { margin: 0 0 10px; }
+  .lede { color: var(--muted); }
+  .note {
+    background: #eef4fc; border-left: 3px solid var(--access);
+    padding: 8px 10px; font-size: 13px; margin: 12px 0 0;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    font-weight: 600; font-size: 11.5px; color: var(--muted); text-align: right;
+    padding: 0 0 4px 6px; border-bottom: 1px solid var(--rule); vertical-align: bottom;
+  }
+  th:first-child { text-align: left; padding-left: 0; }
+  td { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 6px; }
+  tr.total td { font-weight: 600; border-bottom: none; }
+  .legend label {
+    display: grid; grid-template-columns: 18px 28px 1fr; align-items: center;
+    gap: 6px; padding: 4px 0; cursor: pointer;
+  }
+  .swatch { width: 26px; height: 16px; border-radius: 2px; }
+  .sw-region { border: 3px solid var(--ink); }
+  .sw-area { border: 1.5px dashed var(--ink); }
+  .sw-scheduled { background: rgba(208,59,59,.6); border: 1.5px solid var(--no-go); }
+  .sw-consult {
+    background: repeating-linear-gradient(135deg, rgba(250,178,25,.5) 0 3px, rgba(250,178,25,.25) 3px 6px);
+    border: 1.5px solid var(--consult);
+  }
+  .sw-access { background: rgba(42,120,214,.15); border: 1px solid var(--access); }
+  .sw-listed { width: 12px; height: 12px; border-radius: 50%; background: var(--listed); margin-left: 7px; }
+  .sw-river { height: 0; border-top: 2px solid var(--river); border-radius: 0; }
+  .sw-demo { background: rgba(255,255,255,.7); border: 2.5px solid var(--ink); }
+  .terrain label { display: block; padding: 3px 0; cursor: pointer; }
+  .terrain input[type=range] { width: 100%; }
+  .meta { font-size: 12px; color: var(--muted); }
+  a { color: #1c5cab; }
+  .leaflet-popup-content { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .leaflet-popup-content b { display: block; margin-bottom: 2px; }
+  .area-label {
+    background: none; border: none; box-shadow: none; padding: 0;
+    font: 700 13px/1.15 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: .06em; text-transform: uppercase; text-align: center; color: var(--ink);
+    text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+  }
+  .area-label::before { display: none; }
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 60vh auto; height: auto; }
+    #map { height: 60vh; order: -1; }
+    aside { border-right: none; border-top: 1px solid var(--rule); padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Border country and Coquetdale</h1>
+  <p class="lede" id="subtitle">Statutory designations across north Northumberland.</p>
+  <p class="note">This overview shows where designations lie, not where to detect. Each permission is checked on its own with the <a href="../map/">area assessment</a>, which adds a GPS margin and 1 m LiDAR terrain.</p>
+
+  <h2>By area</h2>
+  <table id="summary"></table>
+  <p class="meta" style="margin-top:8px">Scheduled monuments and listed buildings are counts of records touching each area. Open access is the share of land under CRoW Act section 4 open country.</p>
+
+  <h2>Whole region by designation</h2>
+  <table id="designations"></table>
+
+  <h2>Layers</h2>
+  <div class="legend" id="legend"></div>
+
+  <h2>Terrain</h2>
+  <div class="terrain">
+    <label><input type="checkbox" id="hillshade" checked> Hillshade</label>
+    <label class="meta" for="opacity">Strength</label>
+    <input type="range" id="opacity" min="0" max="1" step="0.05" value="0.8">
+    <p class="meta"><span data-param="region_relief_m">50</span> m Environment Agency LiDAR, coarse by design: it shows hills and valleys, not earthworks.</p>
+  </div>
+
+  <h2>About</h2>
+  <p class="meta">The region is the Environment Agency river catchments of the Tweed and Till, Coquet, Rede and upper North Tyne. Records beyond it are shown faded. Scotland is not covered: its designations are held by Historic Environment Scotland and NatureScot, and Scots law on finds differs.</p>
+  <p class="meta">Using a metal detector on a scheduled monument without written consent is an offence under s.42 of the Ancient Monuments and Archaeological Areas Act 1979. This map summarises public data and is not legal advice.</p>
+  <p class="meta">LiDAR and catchments © Environment Agency copyright and/or database right. Designations © Historic England 2026 and © Natural England 2026; contains Ordnance Survey data © Crown copyright and database right 2026. All under the Open Government Licence v3.0.</p>
+  <p class="meta"><a href="../map/">Area assessment for the demo area</a> · <a href="https://github.com/Juhoti/northumberland-detecting-gis">Source code and method</a></p>
+</aside>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="data.js"></script>
+<script>
+  const data = window.REGION_DATA;
+  const colours = {
+    ink: "#0b0b0b", noGo: "#d03b3b", consult: "#fab219", access: "#2a78d6",
+    listed: "#6250d6", river: "#6f9bcb",
+  };
+  // Below this zoom, scheduled monuments are drawn as dots so small ones stay visible.
+  const POLYGON_ZOOM = 13;
+
+  const map = L.map("map", { zoomSnap: 0.25, preferCanvas: true });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+
+  // Multiply blending: white leaves the base map unchanged, grey shades it.
+  const terrainPane = map.createPane("terrain");
+  terrainPane.style.zIndex = 350;
+  terrainPane.style.mixBlendMode = "multiply";
+  const hillshade = L.imageOverlay("hillshade.jpg", data.images.hillshade,
+    { pane: "terrain", opacity: 0.8 }).addTo(map);
+
+  const escape = (text) => String(text ?? "").replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const link = (p, text) => p.url
+    ? `<a href="${escape(p.url)}" target="_blank" rel="noopener">${escape(text)}</a>` : escape(text);
+  const outside = (p) => p.in_region === false ? " Outside the region." : "";
+  // Records beyond the region are faded, as on the static map.
+  const fade = (p, value) => p.in_region === false ? value * 0.4 : value;
+
+  const monumentPopup = (p) =>
+    `<b>${link(p, p.name)}</b>Scheduled monument ${escape(p.ref)}, ${p.area_ha} ha. Detecting without consent is an offence.${outside(p)}`;
+
+  const monumentPolygons = L.geoJSON(data.layers.scheduled_monuments, {
+    style: (f) => ({
+      color: colours.noGo, weight: 1.5, opacity: fade(f.properties, 1),
+      fillColor: colours.noGo, fillOpacity: fade(f.properties, 0.5),
+    }),
+    onEachFeature: (f, l) => l.bindPopup(monumentPopup(f.properties)),
+  });
+  const monumentDots = L.layerGroup(monumentPolygons.getLayers().map((polygon) => {
+    const p = polygon.feature.properties;
+    return L.circleMarker(polygon.getBounds().getCenter(), {
+      radius: 3.5, weight: 1, color: "#fff", opacity: fade(p, 1),
+      fillColor: colours.noGo, fillOpacity: fade(p, 1),
+    }).bindPopup(monumentPopup(p));
+  }));
+  // One legend entry, two representations chosen by zoom.
+  const monuments = L.layerGroup();
+  const showMonuments = () => {
+    const polygons = map.getZoom() >= POLYGON_ZOOM;
+    monuments.clearLayers();
+    monuments.addLayer(polygons ? monumentPolygons : monumentDots);
+  };
+
+  const count = (layer, test = () => true) =>
+    data.layers[layer].features.filter((f) => f.properties.in_region !== false && test(f.properties)).length;
+
+  const layers = [
+    {
+      key: "access", label: "CRoW open access land (information)", swatch: "sw-access",
+      layer: L.geoJSON(data.layers.open_access, {
+        style: { color: colours.access, weight: 0.6, opacity: 0.6, fillColor: colours.access, fillOpacity: 0.12 },
+        onEachFeature: (f, l) => l.bindPopup("<b>CRoW open access land</b>The public right of access excludes metal detecting (Countryside and Rights of Way Act 2000, Sch. 2). Detecting relies on the landowner's permission, not access rights."),
+      }),
+    },
+    {
+      key: "rivers", label: "River", swatch: "sw-river",
+      layer: L.geoJSON(data.layers.rivers, {
+        style: { color: colours.river, weight: 1.2, opacity: 0.9 },
+        interactive: false,
+      }),
+    },
+    {
+      key: "consult", label: "Consult first: SSSI, registered park or battlefield", swatch: "sw-consult",
+      layer: L.geoJSON(data.layers.consult, {
+        style: (f) => ({
+          color: colours.consult, weight: 1.2, opacity: fade(f.properties, 1),
+          fillColor: colours.consult, fillOpacity: fade(f.properties, 0.35),
+        }),
+        onEachFeature: (f, l) => l.bindPopup(`<b>${link(f.properties, f.properties.name)}</b>${escape(f.properties.designation)}. ${escape(f.properties.guidance)}${outside(f.properties)}`),
+      }),
+    },
+    {
+      key: "scheduled", label: "No-go: scheduled monument", swatch: "sw-scheduled",
+      layer: monuments,
+    },
+    {
+      key: "listed", label: `Listed building (${count("listed_buildings").toLocaleString()} in the region)`,
+      swatch: "sw-listed", off: true,
+      layer: L.geoJSON(data.layers.listed_buildings, {
+        pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+          radius: 4, color: "#fff", weight: 1, opacity: fade(f.properties, 1),
+          fillColor: colours.listed, fillOpacity: fade(f.properties, 1),
+        }),
+        onEachFeature: (f, l) => l.bindPopup(`<b>${link(f.properties, f.properties.name)}</b>Grade ${escape(f.properties.grade)} listed building ${escape(f.properties.ref)}.${outside(f.properties)}`),
+      }),
+    },
+    {
+      key: "areas", label: "Area boundary", swatch: "sw-area",
+      layer: L.geoJSON(data.layers.areas, {
+        style: { color: colours.ink, weight: 1.5, dashArray: "6 4", fill: false },
+        interactive: false,
+      }),
+    },
+    {
+      key: "region", label: "Region boundary", swatch: "sw-region",
+      layer: L.geoJSON(data.layers.region, {
+        style: { color: colours.ink, weight: 3, fill: false },
+        interactive: false,
+      }),
+    },
+    {
+      key: "demo", label: "Demo area (example assessment)", swatch: "sw-demo",
+      layer: L.geoJSON(data.layers.examples, {
+        style: { color: colours.ink, weight: 2.5, fillColor: "#fff", fillOpacity: 0.6 },
+        onEachFeature: (f, l) => l.bindPopup('<b>Demo area</b>An arbitrary polygon, not a real permission. <a href="../map/">Open its constraint assessment</a>.'),
+      }),
+    },
+  ];
+
+  const legend = document.getElementById("legend");
+  for (const entry of [...layers].reverse()) {
+    if (!entry.off) entry.layer.addTo(map);
+    const label = document.createElement("label");
+    label.innerHTML = `<input type="checkbox"${entry.off ? "" : " checked"}><span class="swatch ${entry.swatch}"></span><span>${escape(entry.label)}</span>`;
+    label.querySelector("input").addEventListener("change", (e) => {
+      if (e.target.checked) entry.layer.addTo(map); else map.removeLayer(entry.layer);
+    });
+    legend.appendChild(label);
+  }
+
+  for (const [name, lat, lon] of data.labels) {
+    L.tooltip({ permanent: true, direction: "center", className: "area-label", interactive: false })
+      .setLatLng([lat, lon]).setContent(escape(name).replace(/ (?=\S+$)/, "<br>")).addTo(map);
+  }
+
+  map.on("zoomend", showMonuments);
+  map.fitBounds(layers.find((l) => l.key === "region").layer.getBounds(), { padding: [16, 16] });
+  showMonuments();
+
+  const opacity = document.getElementById("opacity");
+  document.getElementById("hillshade").addEventListener("change", (e) => {
+    if (e.target.checked) hillshade.addTo(map); else map.removeLayer(hillshade);
+  });
+  opacity.addEventListener("input", () => hillshade.setOpacity(Number(opacity.value)));
+
+  const num = (value, digits = 0) => Number(value).toLocaleString("en-GB",
+    { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  document.getElementById("summary").innerHTML =
+    "<tr><th>Area</th><th>km²</th><th>Scheduled monuments</th><th>Listed buildings</th><th>Open access</th></tr>" +
+    data.summary.map((row) => {
+      const total = row.area === "Whole region" ? ' class="total"' : "";
+      return `<tr${total}><td>${escape(row.area)}</td><td class="num">${num(row.area_km2)}</td><td class="num">${num(row.scheduled_monuments)}</td><td class="num">${num(row.listed_buildings)}</td><td class="num">${num(row.access_pct)}%</td></tr>`;
+    }).join("");
+  document.getElementById("designations").innerHTML =
+    "<tr><th>Designation</th><th>Records</th><th>Hectares</th><th>Share</th></tr>" +
+    data.designations.map((row) =>
+      `<tr><td>${escape(row.designation)}</td><td class="num">${num(row.records)}</td><td class="num">${num(row.hectares)}</td><td class="num">${num(row.percent, 2)}%</td></tr>`
+    ).join("");
+  document.querySelectorAll("[data-param]").forEach((el) => { el.textContent = data.params[el.dataset.param]; });
+  const whole = data.summary.find((row) => row.area === "Whole region");
+  document.getElementById("subtitle").textContent =
+    `${num(whole.area_km2)} km² of north Northumberland: ${num(whole.scheduled_monuments)} scheduled monuments, ${num(whole.listed_buildings)} listed buildings and ${num(whole.sssis)} SSSIs.`;
+</script>
+</body>
+</html>

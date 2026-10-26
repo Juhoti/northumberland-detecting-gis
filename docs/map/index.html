@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Detecting Constraints Map</title>
+<meta name="description" content="Permission-first constraint map for metal detecting in Northumberland: scheduled monuments, statutory designations and LiDAR terrain for a demo area.">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<style>
+  :root {
+    --surface: #fcfcfb;
+    --panel: #ffffff;
+    --ink: #0b0b0b;
+    --muted: #52514e;
+    --rule: #e4e3df;
+    --no-go: #d03b3b;
+    --consult: #fab219;
+    --available: #0ca30c;
+    --access: #2a78d6;
+    --listed: #6250d6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--surface);
+    color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    height: 100vh;
+  }
+  aside {
+    background: var(--panel);
+    border-right: 1px solid var(--rule);
+    overflow-y: auto;
+    padding: 20px 20px 28px;
+  }
+  #map { height: 100%; }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin: 22px 0 8px;
+  }
+  p { margin: 0 0 10px; }
+  .lede { color: var(--muted); }
+  .note {
+    background: #fff6e0; border-left: 3px solid var(--consult);
+    padding: 8px 10px; font-size: 13px; margin: 12px 0 0;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 5px 0; border-bottom: 1px solid var(--rule); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; padding-left: 8px; }
+  tr.total td { font-weight: 600; border-bottom: none; }
+  .legend label {
+    display: grid; grid-template-columns: 18px 28px 1fr; align-items: center;
+    gap: 6px; padding: 4px 0; cursor: pointer;
+  }
+  .swatch { width: 26px; height: 16px; border-radius: 2px; }
+  .sw-aoi { border: 2.5px solid var(--ink); }
+  .sw-scheduled {
+    background: repeating-linear-gradient(45deg, rgba(208,59,59,.55) 0 3px, rgba(208,59,59,.25) 3px 6px);
+    border: 1.5px solid var(--no-go);
+  }
+  .sw-margin { background: rgba(208,59,59,.3); }
+  .sw-nearby { border: 1.5px dashed var(--no-go); }
+  .sw-consult { background: rgba(250,178,25,.45); border: 1.5px solid var(--consult); }
+  .sw-access { border: 1.5px dashed var(--access); background: rgba(42,120,214,.08); }
+  .sw-available { background: rgba(12,163,12,.2); }
+  .sw-listed { width: 12px; height: 12px; border-radius: 50%; background: var(--listed); margin-left: 7px; }
+  .terrain label { display: block; padding: 3px 0; cursor: pointer; }
+  .terrain input[type=range] { width: 100%; }
+  .meta { font-size: 12px; color: var(--muted); }
+  a { color: #1c5cab; }
+  .leaflet-popup-content { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .leaflet-popup-content b { display: block; margin-bottom: 2px; }
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 60vh auto; height: auto; }
+    #map { height: 60vh; order: -1; }
+    aside { border-right: none; border-top: 1px solid var(--rule); padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Detecting constraints</h1>
+  <p class="lede" id="subtitle">Scheduled monuments, statutory designations and LiDAR terrain for one area of interest.</p>
+  <p class="note">Demo area: an arbitrary polygon in Northumberland, drawn to show the method. It is not a real permission and implies no landowner consent.</p>
+
+  <h2>Summary</h2>
+  <table id="summary"></table>
+
+  <h2>Layers</h2>
+  <div class="legend" id="legend"></div>
+
+  <h2>Terrain</h2>
+  <div class="terrain">
+    <label><input type="radio" name="terrain" value="relief" checked> Local relief model</label>
+    <label><input type="radio" name="terrain" value="hillshade"> Hillshade</label>
+    <label><input type="radio" name="terrain" value="none"> None (base map only)</label>
+    <label class="meta" for="opacity">Opacity</label>
+    <input type="range" id="opacity" min="0" max="1" step="0.05" value="0.85">
+    <p class="meta">Relief model: 1 m DTM minus its <span data-param="lrm_window_m">20</span> m focal mean. Red marks banks and rises, blue marks ditches and hollows.</p>
+  </div>
+
+  <h2>About</h2>
+  <p class="meta">Using a metal detector on a scheduled monument without written consent is an offence under s.42 of the Ancient Monuments and Archaeological Areas Act 1979. A <span data-param="gps_margin_m">10</span> m margin absorbs handheld GPS error. This map summarises public data and is not legal advice.</p>
+  <p class="meta">LiDAR © Environment Agency copyright and/or database right 2022. Designations © Historic England 2026 and © Natural England 2026; contains Ordnance Survey data © Crown copyright and database right 2026. All under the Open Government Licence v3.0.</p>
+  <p class="meta"><a href="../region/">Regional overview: border country and Coquetdale</a> · <a href="https://github.com/Juhoti/northumberland-detecting-gis">Source code and method</a></p>
+</aside>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="data.js"></script>
+<script>
+  const data = window.MAP_DATA;
+  const colours = {
+    ink: "#0b0b0b", noGo: "#d03b3b", consult: "#fab219", available: "#0ca30c",
+    access: "#2a78d6", listed: "#6250d6",
+  };
+
+  const map = L.map("map", { zoomSnap: 0.25 });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(map);
+
+  // Terrain imagery sits in its own pane, below the vector layers.
+  map.createPane("terrain").style.zIndex = 350;
+  const terrain = {
+    relief: L.imageOverlay("relief.jpg", data.images.relief, { pane: "terrain", opacity: 0.85 }),
+    hillshade: L.imageOverlay("hillshade.jpg", data.images.hillshade, { pane: "terrain", opacity: 0.85 }),
+  };
+  let activeTerrain = terrain.relief.addTo(map);
+
+  const escape = (text) => String(text ?? "").replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const link = (p, text) => p.url
+    ? `<a href="${escape(p.url)}" target="_blank" rel="noopener">${escape(text)}</a>` : escape(text);
+
+  const features = (layer, test = () => true) => ({
+    type: "FeatureCollection",
+    features: data.layers[layer].features.filter((f) => test(f.properties)),
+  });
+
+  const layers = [
+    {
+      key: "available", label: "Available for detecting", swatch: "sw-available",
+      layer: L.geoJSON(data.layers.available, {
+        style: { stroke: false, fillColor: colours.available, fillOpacity: 0.05 },
+        onEachFeature: (f, l) => l.bindPopup(`<b>Available for detecting</b>${f.properties.area_ha} ha, subject to the landowner's terms.`),
+      }),
+    },
+    {
+      key: "access", label: "CRoW open access land (information)", swatch: "sw-access",
+      layer: L.geoJSON(features("consult", (p) => p.class === "info"), {
+        style: { color: colours.access, weight: 1.5, dashArray: "4 4", fillOpacity: 0.06 },
+        onEachFeature: (f, l) => l.bindPopup(`<b>${escape(f.properties.designation)}</b>${escape(f.properties.guidance)}`),
+      }),
+    },
+    {
+      key: "consult", label: "Consult first: SSSI, registered park, battlefield or WHS", swatch: "sw-consult",
+      layer: L.geoJSON(features("consult", (p) => p.class === "consult"), {
+        style: { color: colours.consult, weight: 1.5, fillOpacity: 0.4 },
+        onEachFeature: (f, l) => l.bindPopup(`<b>${link(f.properties, f.properties.name)}</b>${escape(f.properties.designation)}. ${escape(f.properties.guidance)}`),
+      }),
+    },
+    {
+      key: "nearby", label: "Scheduled monument near the area", swatch: "sw-nearby",
+      layer: L.geoJSON(features("scheduled_nearby", (p) => !p.overlaps_aoi), {
+        style: { color: colours.noGo, weight: 1.5, dashArray: "6 4", fill: false },
+        onEachFeature: (f, l) => l.bindPopup(`<b>${link(f.properties, f.properties.name)}</b>Scheduled monument ${escape(f.properties.ref)}, ${f.properties.distance_m} m from the area.`),
+      }),
+    },
+    {
+      key: "margin", label: "No-go: GPS margin", swatch: "sw-margin",
+      layer: L.geoJSON(features("no_go", (p) => p.kind === "GPS margin"), {
+        style: { stroke: false, fillColor: colours.noGo, fillOpacity: 0.3 },
+        onEachFeature: (f, l) => l.bindPopup(`<b>GPS margin</b>Buffer around scheduled monument ${escape(f.properties.ref)}.`),
+      }),
+    },
+    {
+      key: "scheduled", label: "No-go: scheduled monument", swatch: "sw-scheduled",
+      layer: L.geoJSON(features("no_go", (p) => p.kind === "scheduled area"), {
+        style: { color: colours.noGo, weight: 2, fillColor: colours.noGo, fillOpacity: 0.5 },
+        onEachFeature: (f, l) => l.bindPopup(`<b>${link(f.properties, f.properties.name)}</b>Scheduled monument ${escape(f.properties.ref)}: ${f.properties.area_ha} ha inside the area. Detecting without consent is an offence.`),
+      }),
+    },
+    {
+      key: "listed", label: "Listed building", swatch: "sw-listed",
+      layer: L.geoJSON(data.layers.listed_nearby, {
+        pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+          radius: 6, color: "#fff", weight: 1.5, fillColor: colours.listed, fillOpacity: 1,
+        }),
+        onEachFeature: (f, l) => l.bindPopup(`<b>${link(f.properties, f.properties.name)}</b>Grade ${escape(f.properties.grade)} listed building, ${f.properties.distance_m} m from the area.`),
+      }),
+    },
+    {
+      key: "aoi", label: "Area of interest", swatch: "sw-aoi",
+      layer: L.geoJSON(data.layers.aoi, {
+        style: { color: colours.ink, weight: 3, fill: false },
+        interactive: false,
+      }),
+    },
+  ];
+
+  const legend = document.getElementById("legend");
+  for (const entry of [...layers].reverse()) {
+    entry.layer.addTo(map);
+    const count = entry.layer.getLayers().length;
+    const label = document.createElement("label");
+    label.innerHTML = `<input type="checkbox" checked><span class="swatch ${entry.swatch}"></span><span>${escape(entry.label)}${count ? "" : ' <span class="meta">(none)</span>'}</span>`;
+    label.querySelector("input").addEventListener("change", (e) => {
+      if (e.target.checked) entry.layer.addTo(map); else map.removeLayer(entry.layer);
+    });
+    legend.appendChild(label);
+  }
+
+  const aoiLayer = layers.find((l) => l.key === "aoi").layer;
+  map.fitBounds(aoiLayer.getBounds(), { padding: [24, 24] });
+
+  const opacity = document.getElementById("opacity");
+  document.querySelectorAll('input[name="terrain"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      if (activeTerrain) map.removeLayer(activeTerrain);
+      activeTerrain = terrain[input.value] || null;
+      if (activeTerrain) activeTerrain.setOpacity(Number(opacity.value)).addTo(map);
+    });
+  });
+  opacity.addEventListener("input", () => activeTerrain && activeTerrain.setOpacity(Number(opacity.value)));
+
+  const rows = data.summary.map((row) => {
+    const total = row.measure.startsWith("Available") ? ' class="total"' : "";
+    return `<tr${total}><td>${escape(row.measure)}</td><td class="num">${row.hectares.toFixed(1)} ha</td><td class="num">${row.percent.toFixed(1)}%</td></tr>`;
+  });
+  document.getElementById("summary").innerHTML = rows.join("");
+  document.querySelectorAll("[data-param]").forEach((el) => { el.textContent = data.params[el.dataset.param]; });
+  document.getElementById("subtitle").textContent =
+    `${data.name}: ${data.summary[0].hectares.toFixed(1)} ha assessed against scheduled monuments, statutory designations and 1 m LiDAR terrain.`;
+</script>
+</body>
+</html>
